@@ -226,9 +226,10 @@ int main(int argc, char **argv) {
 			 !strcmp(line, "dm7020hd"))
 			stb_type = BRCM7405;
 		else if (!strcmp(line, "dm820") ||
-		         !strcmp(line, "dm7080"))
+			 !strcmp(line, "dm7080"))
 			stb_type = BRCM7435;
-		else if (!strcmp(line, "dm520"))
+		else if (!strcmp(line, "dm520") ||
+			 !strcmp(line, "dm525"))
 			stb_type = BRCM73625;
 
 	} else if (strstr(line, "xilleonfb")) {
