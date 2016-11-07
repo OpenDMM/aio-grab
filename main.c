@@ -101,9 +101,9 @@ static void combine(unsigned char *output,
 		    const unsigned char *video, const unsigned char *osd,
 		    unsigned int xres, unsigned int yres);
 
-enum {UNKNOWN,PALLAS,VULCAN,XILLEON,BRCM7401,BRCM7400,BRCM7405,BRCM7435,BRCM73625};
+enum {UNKNOWN,PALLAS,VULCAN,XILLEON,BRCM7401,BRCM7400,BRCM7405,BRCM7435,BRCM73625,BRCM7439};
 enum {BGR,RGB};
-static const char *stb_name[]={"unknown","Pallas","Vulcan","Xilleon","Brcm7401","Brcm7400","Brcm7405","Brcm7435","Brcm73625"};
+static const char *stb_name[]={"unknown","Pallas","Vulcan","Xilleon","Brcm7401","Brcm7400","Brcm7405","Brcm7435","Brcm73625","Brcm7439"};
 static int stb_type=UNKNOWN;
 static int byte_order=BGR;
 
@@ -231,6 +231,8 @@ int main(int argc, char **argv) {
 		else if (!strcmp(line, "dm520") ||
 			 !strcmp(line, "dm525"))
 			stb_type = BRCM73625;
+		else if (!strcmp(line, "dm900"))
+			stb_type = BRCM7439;
 
 	} else if (strstr(line, "xilleonfb")) {
 		stb_type = XILLEON;
@@ -598,12 +600,14 @@ static bool getvideo(unsigned char *video, unsigned int *xres, unsigned int *yre
 		return false;
 	}
 
-	if (stb_type == BRCM7401 || stb_type == BRCM7400 || stb_type == BRCM7405 || stb_type == BRCM7435 || stb_type == BRCM73625)
+	if (stb_type == BRCM7401 || stb_type == BRCM7400 || stb_type == BRCM7405 || stb_type == BRCM7435 || stb_type == BRCM73625 || stb_type == BRCM7439)
 	{
 		// grab brcm7401 pic from decoder memory
 		unsigned long base;
 		if (stb_type == BRCM7435 || stb_type == BRCM73625)
 			base = 0x10600000;
+		else if (stb_type == BRCM7439)
+			base = 0xf0600000;
 		else
 			base = 0x10100000;
 
@@ -619,7 +623,8 @@ static bool getvideo(unsigned char *video, unsigned int *xres, unsigned int *yre
 		unsigned int xsub,ytmp;
 		unsigned int xtmp;
 
-		memcpy(data,memory,100); 
+		memcpy(data,memory,100);
+
 		//vert_start=data[0x1B]<<8|data[0x1A];
 		//vert_end=data[0x19]<<8|data[0x18];
 		if (stb_type == BRCM7435) {
@@ -628,7 +633,7 @@ static bool getvideo(unsigned char *video, unsigned int *xres, unsigned int *yre
 			ofs2=((data[0x41]<<8|data[0x40])&0x3ff)<<4;
 			adr=(data[0x1f]<<24|data[0x1e]<<16|data[0x1d]<<8|data[0x1c])&0xFFFFFF00;
 			adr2=(data[0x37]<<24|data[0x36]<<16|data[0x35]<<8|data[0x34])&0xFFFFFF00;
-		} else if (stb_type == BRCM73625) {
+		} else if (stb_type == BRCM73625 || stb_type == BRCM7439) {
 			stride=data[0x19]<<8|data[0x18];
 			ofs=((data[0x55]<<8|data[0x54])&0x3ff)<<4;
 			ofs2=((data[0x59]<<8|data[0x58])&0x3ff)<<4;
@@ -646,8 +651,8 @@ static bool getvideo(unsigned char *video, unsigned int *xres, unsigned int *yre
 
 		munmap(memory, 100);
 
-		// printf("Stride: %d Res: %d\n",stride,res);
-		// printf("Adr: %X Adr2: %X OFS: %d %d\n",adr,adr2,ofs,ofs2);
+//		printf("Stride: %d Res: %d\n",stride,res);
+//		printf("Adr: %X Adr2: %X OFS: %d %d, offs calced %d(hex %x)\n",adr,adr2,ofs,ofs2,offset,offset);
 
 		// Check that obtained values are sane and prevent segfaults.
 		if ((adr == 0) || (adr2 == 0) || (adr2 <= adr))
@@ -664,9 +669,10 @@ static bool getvideo(unsigned char *video, unsigned int *xres, unsigned int *yre
 		assert(chroma);
 
 		// grabbing luma & chroma plane from the decoder memory
-		if (stb_type == BRCM7401 || stb_type == BRCM7405 || stb_type == BRCM7435 || stb_type == BRCM73625) {
+		if (stb_type == BRCM7401 || stb_type == BRCM7405 || stb_type == BRCM7435 || stb_type == BRCM73625 || stb_type == BRCM7439) {
 			// on dm800/dm500hd we have direct access to the decoder memory
 			memory = mmap(0, offset + stride*(ofs2+64), PROT_READ, MAP_SHARED, mem_fd, adr);
+//			printf("mapped %d bytes at %08x, end %08x\n",offset + stride * (ofs2 + 64), adr, adr + offset + stride * (ofs2 + 64));
 			if (memory == MAP_FAILED) {
 				perror("mmap");
 				return false;
@@ -730,36 +736,78 @@ static bool getvideo(unsigned char *video, unsigned int *xres, unsigned int *yre
 		unsigned int t = 0, t2 = 0, dat1 = 0;
 		unsigned int chr_luma_stride = 0x40;
 
-		if (stb_type == BRCM7405 || stb_type == BRCM7435)
+		if (stb_type == BRCM7405 || stb_type == BRCM7435 || stb_type == BRCM7439)
 			chr_luma_stride *= 2;
 
-		xsub=chr_luma_stride;
+		xsub = chr_luma_stride;
 
 		// decode luma & chroma plane or lets say sort it
-		for (xtmp=0; xtmp < stride; xtmp+=chr_luma_stride)
+		for (xtmp=0; xtmp < stride; xtmp += chr_luma_stride)
 		{
 			if ((stride-xtmp) <= chr_luma_stride)
 				xsub=stride-xtmp;
 
-			dat1=xtmp;
+			dat1 = xtmp;
 
-			for (ytmp = 0; ytmp < ofs; ytmp++) 
+			for (ytmp = 0; ytmp < ofs; ytmp++)
 			{
-				memcpy(luma + dat1, memory + t, xsub); // luma
+#if defined(__arm__)
+				if (t & 0x100)
+				{
+					int cp = xsub % 0x20 ?: 0x20; // cp = xsub % 0x20 ? xsub % 0x20 : 0x20;
+					switch (xsub)
+					{
+						case 0x61 ... 0x80:
+							memcpy(luma + dat1 + 0x60, memory + t + 0x40, cp);
+							cp = 0x20;
+						case 0x41 ... 0x60:
+							memcpy(luma + dat1 + 0x40, memory + t + 0x60, cp);
+							cp = 0x20;
+						case 0x21 ... 0x40:
+							memcpy(luma + dat1 + 0x20, memory + t + 0x00, cp);
+							cp = 0x20;
+						default:
+							memcpy(luma + dat1 + 0x00, memory + t + 0x20, cp);
+					}
+				}
+				else
+#endif
+					memcpy(luma + dat1, memory + t, xsub); // luma
 
 				if ((int)(ofs2-ytmp) > 0)
 				{
-					memcpy(chroma + dat1, memory + offset + t2, xsub); // chroma
-					t2 += chr_luma_stride;
+#if defined(__arm__)
+					if (t2 & 0x100)
+					{
+						int cp = xsub % 0x20 ?: 0x20;
+						switch (xsub)
+						{
+							case 0x61 ... 0x80:
+								memcpy(chroma + dat1 + 0x60, memory + offset + t2 + 0x40, cp);
+								cp = 0x20;
+							case 0x41 ... 0x60:
+								memcpy(chroma + dat1 + 0x40, memory + offset + t2 + 0x60, cp);
+								cp = 0x20;
+							case 0x21 ... 0x40:
+								memcpy(chroma + dat1 + 0x20, memory + offset + t2 + 0x00, cp);
+								cp = 0x20;
+							default:
+								memcpy(chroma + dat1 + 0x00, memory + offset + t2 + 0x20, cp);
+						}
+					}
+					else
+#endif
+						memcpy(chroma + dat1, memory + offset + t2, xsub); // chroma
+
+						t2 += chr_luma_stride;
 				}
 
 				t += chr_luma_stride;
-
-				dat1+=stride;
+				dat1 += stride;
 			}
 		}
 
-		if (stb_type == BRCM7401 || stb_type == BRCM7405 || stb_type == BRCM7435 || stb_type == BRCM73625)
+		if (stb_type == BRCM7401 || stb_type == BRCM7405 || stb_type == BRCM7435 || stb_type == BRCM73625 || stb_type == BRCM7439)
 			munmap(memory, offset + stride * (ofs2 + 64));
 		else if (stb_type == BRCM7400) {
 			memory -= 0x1000;
