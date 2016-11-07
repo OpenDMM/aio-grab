@@ -729,7 +729,6 @@ static bool getvideo(unsigned char *video, unsigned int *xres, unsigned int *yre
 
 		unsigned int t = 0, t2 = 0, dat1 = 0;
 		unsigned int chr_luma_stride = 0x40;
- 		unsigned int sw;
 
 		if (stb_type == BRCM7405 || stb_type == BRCM7435)
 			chr_luma_stride *= 2;
@@ -743,25 +742,19 @@ static bool getvideo(unsigned char *video, unsigned int *xres, unsigned int *yre
 				xsub=stride-xtmp;
 
 			dat1=xtmp;
-			sw=1;
+
 			for (ytmp = 0; ytmp < ofs; ytmp++) 
 			{
 				memcpy(luma + dat1, memory + t, xsub); // luma
+
+				if ((int)(ofs2-ytmp) > 0)
+				{
+					memcpy(chroma + dat1, memory + offset + t2, xsub); // chroma
+					t2 += chr_luma_stride;
+				}
+
 				t += chr_luma_stride;
 
-				switch (ofs2-ytmp) // the two switch commands are much faster than one if statement
-				{
-					case 0:
-						sw=0;
-						break;
-				}
-				switch (sw)
-				{
-					case 1:
-						memcpy(chroma + dat1, memory + offset + t2, xsub); // chroma
-						t2 += chr_luma_stride;
-						break;
-				}
 				dat1+=stride;
 			}
 		}
