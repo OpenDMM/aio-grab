@@ -1043,6 +1043,8 @@ static bool getosd(unsigned char *osd, unsigned int *xres, unsigned int *yres)
 		return false;
 	}
 
+	lfb += var_screeninfo.yoffset * fix_screeninfo.line_length;
+
 	if (var_screeninfo.red.offset < var_screeninfo.blue.offset)
 		byte_order = RGB;
 
